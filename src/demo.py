@@ -1,24 +1,42 @@
+import os
+
 import chainlit as cl
+from dotenv import load_dotenv
+from openai import OpenAI
 
+# .envファイルのパス
+dotenv_path = '/workspaces/rechatbot-demo/.env'
+load_dotenv(dotenv_path)
 
-@cl.step
-def tool():
-    return "Response from the tool!"
+# OpenAI APIキーを環境変数から取得
+api_key = os.environ.get('OPENAI_API_KEY3')
+if not api_key:
+    raise ValueError("OpenAI API key not found. Make sure it is set in the .env file.")
 
+# OpenAI APIキーを使用してクライアントを設定
+client = OpenAI(api_key=api_key)
+print(f"API Key: {api_key}")
 
-@cl.on_message  # this function will be called every time a user inputs a message in the UI
-async def main(message: cl.Message):
-    """
-    This function is called every time a user inputs a message in the UI.
-    It sends back an intermediate response from the tool, followed by the final answer.
-    Args:
-        message: The user's message.
-    Returns:
-        None.
-    """
+@cl.on_chat_start
+async def start():
+    await cl.Message(content='こんにちは！どのようなお手伝いができますか？').send()
 
-    # Call the tool
-    tool()
+settings = {
+    "model": "gpt-3.5-turbo",
+    "temperature": 0,
+}
 
-    # Send the final answer.
-    await cl.Message(content="This is the final answer").send()
+@cl.on_message
+async def on_message(message: cl.Message):
+    response = client.chat.completions.create(  # 修正ポイント
+        model=settings["model"],
+        messages=[{"role": "user", "content": message.content}],  # チャット形式でメッセージを指定
+        max_tokens=150,
+        temperature=settings["temperature"]
+    )
+    # messageはオブジェクトなので、.contentを使用
+    content = response.choices[0].message.content
+    if content is not None:
+        await cl.Message(content=content.strip()).send()
+    else:
+        await cl.Message(content="申し訳ありませんが、返答が得られませんでした。").send()
